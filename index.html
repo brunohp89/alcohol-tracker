@@ -1,0 +1,1251 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#f3f4f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12151d" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Contatore Alcol</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root { color-scheme: light; box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; padding: 0; }
+/* Layout: one narrow column, the tap target first, then today's tally, the week, the log, Drive status last. */
+:root {
+  --bg: #f3f4f7;
+  --surface: #ffffff;
+  --fg: #1b2130;
+  --muted: #677086;
+  --line: #dde1ea;
+  --amber: #c27a0e;
+  --amber-ink: #ffffff;
+  --amber-soft: #f6e7cc;
+  --danger: #b43a2e;
+  --ok: #2f7a4b;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151d; --surface: #1a1f2a; --fg: #e8ebf2; --muted: #96a0b5; --line: #2b3242;
+    --amber: #f0a73a; --amber-ink: #1a1206; --amber-soft: #3a2c14; --danger: #ef7d70; --ok: #6cc690;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151d; --surface: #1a1f2a; --fg: #e8ebf2; --muted: #96a0b5; --line: #2b3242;
+  --amber: #f0a73a; --amber-ink: #1a1206; --amber-soft: #3a2c14; --danger: #ef7d70; --ok: #6cc690;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+.wrap { max-width: 460px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: flex; flex-direction: column; gap: 22px; }
+
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+.date { color: var(--muted); font-size: 13px; text-transform: capitalize; }
+
+.tap-zone { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-block: 6px; }
+#tap {
+  width: min(62vw, 210px); aspect-ratio: 1; max-width: 100%;
+  border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--amber); color: var(--amber-ink);
+  font-family: var(--f-display); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  box-shadow: 0 0 0 10px var(--amber-soft);
+  transition: transform .12s ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
+}
+.taps { position: relative; display: flex; justify-content: center; width: 100%; }
+#tap-half {
+  position: absolute; left: calc(50% + min(31vw, 105px) + 14px); bottom: 4px;
+  width: 58px; height: 58px; border-radius: 50%; cursor: pointer;
+  background: var(--surface); color: var(--amber); border: 2px solid var(--amber);
+  font-family: var(--f-display); display: flex; align-items: center; justify-content: center;
+  transition: transform .12s ease; -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none;
+}
+#tap-half .plus { font-size: 24px; font-weight: 700; line-height: 1; }
+#tap-half:active { transform: scale(.92); }
+#tap-half:focus-visible { outline: 3px solid var(--fg); outline-offset: 4px; }
+#tap-half.pop { animation: pop .35s ease; }
+@media (max-width: 400px) { #tap-half { left: auto; right: 0; } }
+#tap:active { transform: scale(.95); }
+#tap:focus-visible { outline: 3px solid var(--fg); outline-offset: 14px; }
+#tap .plus { font-size: 64px; font-weight: 700; line-height: 1; }
+#tap .lbl { font-size: 15px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+#tap.pop { animation: pop .35s ease; }
+@keyframes pop { 40% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { #tap, #tap.pop, #tap-half, #tap-half.pop { transition: none; animation: none; } }
+
+.today { font-size: 15px; color: var(--muted); text-align: center; min-height: 1.45em; }
+.today b { font-family: var(--f-mono); color: var(--fg); font-size: 18px; }
+
+.toast { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.toast-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.log-day li .u { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; }
+.btn-link { background: none; border: 0; padding: 4px 2px; color: var(--amber); font: 600 14px var(--f-body); cursor: pointer; }
+.btn-link:focus-visible, .btn:focus-visible, .del:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); border-block: 1px solid var(--line); }
+.stat { padding-block: 12px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.stat + .stat { border-left: 1px solid var(--line); }
+.stat .v { font-family: var(--f-mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 15px; margin: 0 0 10px; color: var(--muted); letter-spacing: .02em; }
+
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 132px; }
+.day { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0; }
+.bar-n { font-family: var(--f-mono); font-size: 12px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.bar { width: 100%; max-width: 30px; background: var(--amber); border-radius: 4px 4px 1px 1px; min-height: 2px; }
+.bar.zero { background: var(--line); }
+.day.is-today .bar-d { color: var(--fg); font-weight: 600; }
+button.day { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; -webkit-tap-highlight-color: transparent; }
+button.day:disabled { cursor: default; }
+button.day:not(:disabled):hover .bar-d { color: var(--fg); }
+button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.day.is-sel .bar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
+.day.is-sel .bar-d { color: var(--fg); font-weight: 700; }
+.hint { font-weight: 400; font-size: 12px; color: var(--muted); }
+.log-day h3 .day-btn { background: none; border: 0; padding: 0; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.log-day h3 .day-btn:hover { color: var(--fg); }
+.log-day.is-sel h3 { color: var(--amber); }
+.bac-day { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 8px; background: var(--amber-soft); font-size: 14px; }
+.bac-day span { text-transform: capitalize; font-weight: 600; }
+.bar-d { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+
+.log { display: flex; flex-direction: column; gap: 14px; }
+.log-day h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; }
+.log-day ul { list-style: none; margin: 0; padding: 0; }
+.log-day li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-block: 7px; border-bottom: 1px solid var(--line); }
+.log-day li .t { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.del { background: none; border: 0; color: var(--muted); font: 500 13px var(--f-body); cursor: pointer; padding: 4px 6px; }
+.del.armed { color: var(--danger); font-weight: 600; }
+.sum-wrap { overflow-x: auto; }
+.sum { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.sum th, .sum td { padding: 7px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+.sum th:first-child, .sum td:first-child { text-align: left; color: var(--muted); font-size: 13px; font-weight: 400; }
+.sum thead th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.sum td { font-family: var(--f-mono); font-size: 15px; }
+.sum td.warn { color: var(--danger); }
+.gauge { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.g-row { display: grid; grid-template-columns: 74px 1fr 44px; align-items: center; gap: 10px; font-size: 13px; }
+.g-row .g-l { color: var(--muted); }
+.g-row .g-v { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.g-track { position: relative; height: 10px; background: var(--line); border-radius: 5px; }
+.g-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amber); border-radius: 5px; }
+.g-fill.over { background: var(--danger); }
+.g-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--fg); }
+.g-scale { display: grid; grid-template-columns: 74px 1fr 44px; gap: 10px; font-size: 11px; color: var(--muted); }
+.g-scale .g-ticks { position: relative; height: 14px; }
+.g-scale .g-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.bac { display: flex; flex-direction: column; gap: 8px; }
+.bac-head { display: flex; justify-content: space-between; align-items: baseline; }
+.bac-head h2 { margin: 0; }
+.bac-main { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.bac-v { font-family: var(--f-mono); font-size: 36px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.bac-u { font-size: 15px; color: var(--muted); }
+.bac-pct { font-family: var(--f-mono); font-size: 13px; color: var(--muted); margin-left: 6px; }
+.bac-sub { font-size: 14px; color: var(--muted); }
+.bac-sub b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bac-chart { position: relative; height: 128px; touch-action: pan-y; }
+.bac-chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.bac-chart .grid { stroke: var(--line); stroke-width: 1; }
+.bac-chart .axis-t { fill: var(--muted); font: 10px var(--f-body); }
+.bac-chart .area { fill: var(--amber-soft); }
+.bac-chart .line { fill: none; stroke: var(--amber); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.bac-chart .line.proj { stroke-dasharray: 4 4; }
+.bac-chart .now { stroke: var(--fg); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+.bac-chart .wake { fill: var(--danger); opacity: .14; }
+.bac-chart .wake-c { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.bac-chart .wake-t { fill: var(--danger); font: 600 10px var(--f-body); }
+.bac-sub .wake-l { display: block; margin-top: 2px; }
+.bac-sub .wake-l b { color: var(--danger); }
+.bac-chart .cross { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.bac-dot { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 2px var(--surface); transform: translate(-50%, -50%); pointer-events: none; }
+.bac-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font: 12px var(--f-mono); color: var(--fg); white-space: nowrap; pointer-events: none; }
+.bac-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.bac-fields { grid-template-columns: 1fr 0.8fr 1.3fr; }
+[hidden] { display: none !important; }
+.field select { font: 15px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 6px; width: 100%; min-width: 0; box-sizing: border-box; }
+.field select:focus { outline: 2px solid var(--amber); outline-offset: 0; border-color: transparent; }
+.manual { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.manual summary { cursor: pointer; padding: 11px 14px; font-weight: 600; font-size: 14px; color: var(--fg); list-style-position: inside; }
+.manual summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; border-radius: 10px; }
+.manual form { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+.fields { display: grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: 10px; }
+@media (max-width: 360px) { .fields { grid-template-columns: 1fr 1fr; } }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; color: var(--muted); }
+.field input { font: 15px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; width: 100%; min-width: 0; box-sizing: border-box; }
+.field input:focus { outline: 2px solid var(--amber); outline-offset: 0; border-color: transparent; }
+.form-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.form-err { color: var(--danger); font-size: 13px; }
+.btn { font: 600 14px var(--f-body); background: var(--amber); color: var(--amber-ink); border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+.tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+.empty { color: var(--muted); font-size: 14px; padding: 14px; border: 1px dashed var(--line); border-radius: 10px; text-align: center; }
+.more { align-self: flex-start; }
+
+.drive { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.drive-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.drive .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.drive.ok .dot { background: var(--ok); }
+.drive.busy .dot { background: var(--amber); }
+.drive.err .dot { background: var(--danger); }
+.drive a { color: var(--amber); font-weight: 600; text-decoration: none; }
+.drive a:hover { text-decoration: underline; }
+.note { font-size: 12px; color: var(--muted); }
+.asof { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted); padding: 6px 10px; border-radius: 8px; margin-bottom: -10px; }
+.asof.past { background: var(--amber-soft); color: var(--fg); font-weight: 600; }
+.asof-r { display: flex; align-items: center; gap: 8px; }
+.asof input { font: 15px var(--f-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.asof input:focus { outline: 2px solid var(--amber); outline-offset: 0; border-color: transparent; }
+.day.is-ref .bar-d { color: var(--fg); font-weight: 600; }
+.setup { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--amber); border-radius: 10px; background: var(--surface); }
+.setup h2 { margin: 0; color: var(--fg); }
+.setup form { display: flex; flex-direction: column; gap: 10px; }
+.setup-actions { display: flex; align-items: center; gap: 12px; }
+.btn:disabled { opacity: .6; cursor: default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Contatore Alcol</h1>
+    <span class="date" id="date"></span>
+  </header>
+
+  <section class="setup" id="setup" hidden aria-labelledby="setup-h">
+    <h2 id="setup-h">Collega il foglio Google</h2>
+    <form id="setup-form" novalidate>
+      <label class="field"><span>URL della web app Apps Script (finisce con /exec)</span><input id="c-url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" required></label>
+      <label class="field"><span>Token</span><input id="c-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <div class="form-foot">
+        <span class="form-err" id="c-err" aria-live="polite"></span>
+        <div class="setup-actions">
+          <button class="btn-link" id="c-cancel" type="button" hidden>Annulla</button>
+          <button class="btn" id="c-submit" type="submit">Collega</button>
+        </div>
+      </div>
+    </form>
+    <p class="note">URL e token restano solo in questo browser. Finché non colleghi il foglio l'app funziona lo stesso e tiene le modifiche in coda.</p>
+  </section>
+
+  <section class="tap-zone">
+    <div class="taps">
+      <button id="tap" type="button" aria-label="Aggiungi una unità">
+        <span class="plus">+1</span>
+        <span class="lbl">unità</span>
+      </button>
+      <button id="tap-half" type="button" aria-label="Aggiungi mezza unità">
+        <span class="plus">+½</span>
+      </button>
+    </div>
+    <div class="today" id="today" aria-live="polite">Caricamento…</div>
+  </section>
+
+  <div class="toast" id="toast" hidden>
+    <div class="toast-top">
+      <span id="toast-msg"></span>
+      <button class="btn-link" id="undo" type="button">Annulla</button>
+    </div>
+  </div>
+
+  <div class="asof" id="asof">
+    <label for="ref-date">Statistiche al</label>
+    <div class="asof-r">
+      <input id="ref-date" type="date">
+      <button class="btn-link" id="ref-reset" type="button" hidden>Oggi</button>
+    </div>
+  </div>
+
+  <section class="stats" aria-label="Riepilogo">
+    <div class="stat"><span class="v" id="s-today">0</span><span class="k" id="k-today">Oggi</span></div>
+    <div class="stat"><span class="v" id="s-7">0</span><span class="k">Ultimi 7 gg</span></div>
+    <div class="stat"><span class="v" id="s-30">0</span><span class="k">Ultimi 30 gg</span></div>
+  </section>
+
+  <section class="bac" id="bac" aria-labelledby="bac-h">
+    <div class="bac-head">
+      <h2 id="bac-h">Alcolemia stimata</h2>
+      <button class="btn-link" id="bac-edit" type="button">Profilo</button>
+    </div>
+    <div class="bac-day" id="bac-day" hidden>
+      <span id="bac-day-l"></span>
+      <button class="btn-link" id="bac-back" type="button">Torna a oggi</button>
+    </div>
+    <div class="bac-main">
+      <span class="bac-v" id="bac-v">-</span>
+      <span class="bac-u">g/L</span>
+      <span class="bac-pct" id="bac-pct"></span>
+    </div>
+    <div class="bac-sub" id="bac-sub" aria-live="polite"></div>
+    <div class="bac-chart" id="bac-chart" hidden>
+      <svg id="bac-svg" viewBox="0 0 320 120" preserveAspectRatio="none" role="img" aria-label="Andamento stimato dell'alcolemia"></svg>
+      <div class="bac-tip" id="bac-tip" hidden></div>
+    </div>
+    <form class="bac-form" id="bac-form" hidden novalidate>
+      <div class="fields bac-fields">
+        <label class="field"><span>Peso</span><input id="p-weight" type="number" min="30" max="300" step="0.5" inputmode="decimal" required></label>
+        <label class="field"><span>Unità</span><select id="p-wunit"><option value="kg">kg</option><option value="lb">lb</option></select></label>
+        <label class="field"><span>Sesso</span><select id="p-sex"><option value="m">Uomo</option><option value="f">Donna</option></select></label>
+      </div>
+      <div class="form-foot">
+        <span class="form-err" id="p-err" aria-live="polite"></span>
+        <button class="btn" type="submit">Salva profilo</button>
+      </div>
+    </form>
+    <p class="note">Stima indicativa con la formula di Widmark: il valore reale può scostarsi del 20% o più (cibo, metabolismo, farmaci, idratazione). Non usarla per decidere se guidare. La fascia rossa è la finestra in cui è più probabile un risveglio da rimbalzo, quando l'effetto GABAergico dell'alcol si esaurisce: va dalla discesa sotto 0,1 g/L a 90 minuti dopo il ritorno a zero (linea tratteggiata). È un'euristica, non un modello validato.</p>
+  </section>
+
+  <section>
+    <h2>Settimana <span class="hint">· tocca un giorno per la sua curva</span></h2>
+    <div class="week" id="week"></div>
+  </section>
+
+  <section>
+    <h2 id="sum-h">Riepilogo</h2>
+    <div class="sum-wrap">
+      <table class="sum" id="sum">
+        <thead><tr><th></th><th>Settimana</th><th>Mese</th><th>Anno</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="gauge" id="gauge" aria-label="Media settimanale rispetto alla soglia"></div>
+    <p class="note" id="sum-since" hidden></p>
+    <p class="note">Riferimento: per l'OMS non esiste una quantità sicura, il rischio sale dal primo bicchiere. Non c'è un limite raccomandato, quindi come soglia uso la definizione di consumo elevato del NIAAA (USA) per gli uomini: 15 o più drink a settimana, oppure 5 o più in un giorno. Stare sotto non significa rischio zero.</p>
+  </section>
+
+  <details class="manual" id="manual">
+    <summary>Aggiungi a mano</summary>
+    <form id="manual-form" novalidate>
+      <div class="fields">
+        <label class="field"><span>Data</span><input id="m-date" type="date" required></label>
+        <label class="field"><span>Ora</span><input id="m-time" type="time" required></label>
+        <label class="field"><span>Unità</span><input id="m-units" type="number" min="0.5" max="20" step="0.5" value="1" inputmode="decimal" required></label>
+      </div>
+      <div class="form-foot">
+        <span class="form-err" id="m-err" aria-live="polite"></span>
+        <button class="btn" type="submit">Aggiungi</button>
+      </div>
+    </form>
+  </details>
+
+  <section>
+    <h2>Storico</h2>
+    <div class="log" id="log"></div>
+  </section>
+
+  <footer class="drive" id="drive">
+    <div class="drive-row">
+      <span id="drive-status"><span class="dot"></span>Foglio Google: in attesa</span>
+      <a id="drive-link" href="#" target="_blank" rel="noopener" hidden>Apri il foglio</a>
+      <button class="btn-link" id="sync" type="button">Sincronizza ora</button>
+      <button class="btn-link" id="cfg" type="button">Collegamento</button>
+    </div>
+    <span class="note">1 unità = 1 drink standard (14 g di etanolo: una birra da 355 ml al 5%, un bicchiere di vino da 150 ml al 12%, uno shot da 44 ml al 40%).</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // localStorage keys. The Google Sheet behind the Apps Script web app is the source of truth;
+  // this is a local copy plus an outbox of changes not yet confirmed by the sheet.
+  const LS = { entries: "alcol.entries.v1", outbox: "alcol.outbox.v1", profile: "alcol.profile.v1", config: "alcol.config.v1", meta: "alcol.meta.v1" };
+  const TZ = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch { return ""; } })();
+  const store = {
+    get(key, fallback) { try { const raw = localStorage.getItem(key); return raw == null ? fallback : JSON.parse(raw); } catch { return fallback; } },
+    set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; } },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    date: $("date"), tap: $("tap"), tapHalf: $("tap-half"), today: $("today"), toast: $("toast"), toastMsg: $("toast-msg"),
+    undo: $("undo"), sToday: $("s-today"), s7: $("s-7"), s30: $("s-30"), week: $("week"), log: $("log"),
+    bac: $("bac"), bacDay: $("bac-day"), bacDayL: $("bac-day-l"), bacBack: $("bac-back"), bacV: $("bac-v"), bacPct: $("bac-pct"), bacSub: $("bac-sub"), bacChart: $("bac-chart"), bacSvg: $("bac-svg"), bacTip: $("bac-tip"),
+    bacEdit: $("bac-edit"), pForm: $("bac-form"), pWeight: $("p-weight"), pWunit: $("p-wunit"), pSex: $("p-sex"), pErr: $("p-err"),
+    sum: $("sum"), gauge: $("gauge"), manual: $("manual"), mForm: $("manual-form"), mDate: $("m-date"), mTime: $("m-time"), mUnits: $("m-units"), mErr: $("m-err"),
+    refDate: $("ref-date"), refReset: $("ref-reset"), asof: $("asof"), kToday: $("k-today"), sumH: $("sum-h"),
+    drive: $("drive"), driveStatus: $("drive-status"), driveLink: $("drive-link"), sync: $("sync"), cfg: $("cfg"),
+    setup: $("setup"), setupForm: $("setup-form"), cUrl: $("c-url"), cToken: $("c-token"), cErr: $("c-err"), cCancel: $("c-cancel"), cSubmit: $("c-submit"),
+  };
+
+  /** @type {{id:string, ts:number, units:number, lastTap:number, manual?:boolean}[]} newest first; ts = first tap of the drink */
+  let entries = [];
+  let loaded = false;
+  let config = null;        // { url, token } of the Apps Script web app; null until set up
+  let outbox = [];          // [{ seq, op: "upsert"|"delete"|"profile", id?, entry?, profile? }] oldest first
+  let seq = 0;
+  let meta = null;          // { sheetUrl, syncedAt }
+  let editingConfig = false;
+  let undoState = null;     // { id, prev: entry|null } for the last tap
+  let toastTimer = 0;
+  let syncTimer = 0;
+  let syncing = false;
+  let syncAgain = false;
+  let syncError = "";
+  let logLimit = 30;
+
+  // ---------- date helpers (viewer's local time) ----------
+  const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+  const startOfDay = (d = new Date()) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const fmtTime = new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" });
+  const fmtDayLong = new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  const fmtDayShort = new Intl.DateTimeFormat("it-IT", { weekday: "short" });
+  const fmtDate = new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const fmtDayMonth = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "short" });
+  const keyStart = (key) => { const [y, m, d] = key.split("-").map(Number); return new Date(y, m - 1, d).getTime(); };
+  // Calendar-day shift (DST-safe, unlike adding multiples of 24h).
+  const shift = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + n); return d.getTime(); };
+
+  // Units come in halves: show 0,5 as "½" and 2,5 as "2½" (Italian decimal style elsewhere).
+  const fmtU = (n) => { const w = Math.floor(n), h = n - w >= 0.25; return w === 0 ? (h ? "½" : "0") : String(w) + (h ? "½" : ""); };
+  const unitsLabel = (n) => fmtU(n) + " unità";
+
+  // ---------- rendering ----------
+  function render() {
+    els.date.textContent = fmtDayLong.format(new Date());
+    const now = Date.now();
+    const today0 = startOfDay();
+    // Reference day for stats, week bars and summary: the picked date, or today.
+    const ref0 = refDay ? keyStart(refDay) : today0;
+    const refEnd = shift(ref0, 1);
+    const sumSince = (t0) => entries.reduce((s, e) => s + (e.ts >= t0 ? e.units : 0), 0);
+    const sumRange = (t0) => entries.reduce((s, e) => s + (e.ts >= t0 && e.ts < refEnd ? e.units : 0), 0);
+    const todayN = sumSince(today0);
+
+    els.sToday.textContent = fmtU(sumRange(ref0));
+    els.s7.textContent = fmtU(sumRange(shift(ref0, -6)));
+    els.s30.textContent = fmtU(sumRange(shift(ref0, -29)));
+    els.kToday.textContent = refDay ? fmtDayMonth.format(ref0).replace(".", "") : "Oggi";
+    renderAsof(ref0);
+
+    if (!loaded) els.today.textContent = "Caricamento…";
+    else if (todayN === 0) els.today.textContent = "Nessuna unità oggi";
+    else {
+      const todays = entries.filter((e) => e.ts >= today0);
+      const last = todays[0];
+      els.today.innerHTML = "";
+      const b = document.createElement("b"); b.textContent = fmtU(todayN);
+      els.today.append("Oggi ", b, " unità in " + todays.length + " drink" + (last ? ", l'ultimo alle " + fmtTime.format(last.ts) : ""));
+    }
+
+    // week bars
+    const byDay = new Map();
+    for (const e of entries) byDay.set(dayKey(e.ts), (byDay.get(dayKey(e.ts)) || 0) + e.units);
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(ref0); d.setDate(d.getDate() - i);
+      days.push({ d, n: byDay.get(dayKey(d.getTime())) || 0, today: d.getTime() === today0, ref: i === 0 && !!refDay });
+    }
+    const max = Math.max(4, ...days.map((x) => x.n));
+    els.week.innerHTML = "";
+    for (const x of days) {
+      const col = document.createElement("button"); col.type = "button";
+      const key = dayKey(x.d.getTime());
+      const sel = selDay === key;
+      col.className = "day" + (x.today ? " is-today" : "") + (x.ref ? " is-ref" : "") + (sel ? " is-sel" : "");
+      col.disabled = !x.n && !x.today;
+      col.setAttribute("aria-pressed", String(sel));
+      col.addEventListener("click", () => selectDay(key));
+      const n = document.createElement("span"); n.className = "bar-n"; n.textContent = x.n ? fmtU(x.n) : "";
+      const bar = document.createElement("div"); bar.className = "bar" + (x.n ? "" : " zero");
+      bar.style.height = x.n ? Math.max(6, (x.n / max) * 92) + "px" : "2px";
+      const lab = document.createElement("span"); lab.className = "bar-d"; lab.textContent = x.today ? "oggi" : fmtDayShort.format(x.d).replace(".", "") + (refDay ? " " + x.d.getDate() : "");
+      col.append(n, bar, lab);
+      col.setAttribute("aria-label", fmtDayLong.format(x.d) + ": " + unitsLabel(x.n) + (x.n ? ", mostra la curva dell'alcolemia" : ""));
+      els.week.append(col);
+    }
+
+    // log
+    els.log.innerHTML = "";
+    if (loaded && entries.length === 0) {
+      const p = document.createElement("div"); p.className = "empty";
+      p.textContent = "Ancora nessuna registrazione. Tocca +1 per ogni unità, +½ per mezza: più tocchi entro un minuto diventano un solo drink da più unità.";
+      els.log.append(p);
+    } else {
+      const shown = entries.slice(0, logLimit);
+      const groups = [];
+      for (const e of shown) {
+        const k = dayKey(e.ts);
+        let g = groups[groups.length - 1];
+        if (!g || g.k !== k) { g = { k, ts: e.ts, items: [] }; groups.push(g); }
+        g.items.push(e);
+      }
+      for (const g of groups) {
+        const wrap = document.createElement("div"); wrap.className = "log-day";
+        const h = document.createElement("h3");
+        const a = document.createElement("button"); a.type = "button"; a.className = "day-btn";
+        a.textContent = g.k === dayKey(now) ? "Oggi" : fmtDayLong.format(g.ts);
+        a.title = "Mostra la curva dell'alcolemia di questo giorno";
+        a.addEventListener("click", () => selectDay(g.k));
+        if (selDay === g.k) wrap.classList.add("is-sel");
+        const total = byDay.get(g.k) || 0;
+        const c = document.createElement("span"); c.textContent = unitsLabel(total);
+        h.append(a, c);
+        const ul = document.createElement("ul");
+        for (const e of g.items) {
+          const li = document.createElement("li");
+          const t = document.createElement("span"); t.className = "t"; t.textContent = fmtTime.format(e.ts);
+          const w = document.createElement("span"); w.className = "u"; w.textContent = unitsLabel(e.units);
+          if (e.manual) { const tg = document.createElement("span"); tg.className = "tag"; tg.textContent = "a mano"; w.append(tg); }
+          const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "Elimina";
+          del.addEventListener("click", () => {
+            if (!del.classList.contains("armed")) {
+              del.classList.add("armed"); del.textContent = "Conferma";
+              setTimeout(() => { if (del.isConnected) { del.classList.remove("armed"); del.textContent = "Elimina"; } }, 3500);
+              return;
+            }
+            removeEntry(e.id);
+          });
+          li.append(t, w, del);
+          ul.append(li);
+        }
+        wrap.append(h, ul);
+        els.log.append(wrap);
+      }
+      if (entries.length > logLimit) {
+        const more = document.createElement("button"); more.type = "button"; more.className = "btn-link more";
+        more.textContent = "Mostra altre";
+        more.addEventListener("click", () => { logLimit += 60; render(); });
+        els.log.append(more);
+      }
+    }
+    renderSummary(byDay, ref0, refEnd);
+    renderBac();
+    renderSync();
+  }
+
+  // Reference thresholds (NIAAA heavy drinking, men): 15+ drinks per week or 5+ on a single day.
+  const HEAVY_WEEK = 15;
+  const HEAVY_DAY = 5;
+
+  function renderSummary(byDay, today0, endTs) {
+    const today = new Date(today0);
+    const weekStart = new Date(today0); weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday
+    const periods = [
+      { key: "Settimana", start: weekStart.getTime() },
+      { key: "Mese", start: new Date(today.getFullYear(), today.getMonth(), 1).getTime() },
+      { key: "Anno", start: new Date(today.getFullYear(), 0, 1).getTime() },
+    ];
+    // Periods start no earlier than the first logged day: days before tracking began are unknown, not alcohol-free.
+    const firstDay = entries.length ? startOfDay(new Date(entries[entries.length - 1].ts)) : null;
+    for (const p of periods) {
+      p.clamped = firstDay != null && p.start < firstDay;
+      if (p.clamped) p.start = firstDay;
+    }
+    const clamped = periods.filter((p) => p.clamped).map((p) => p.key);
+    const sinceEl = document.getElementById("sum-since");
+    if (loaded && clamped.length) {
+      const names = clamped.length > 1 ? clamped.slice(0, -1).join(", ") + " e " + clamped[clamped.length - 1] : clamped[0];
+      sinceEl.textContent = names + (clamped.length > 1 ? " sono calcolati" : " è calcolato") + " dal primo giorno registrato (" + fmtDayMonth.format(firstDay).replace(".", "") + "), non dall'inizio del periodo.";
+      sinceEl.hidden = false;
+    } else sinceEl.hidden = true;
+    for (const p of periods) {
+      let days = 0, total = 0, heavyDays = 0, dryDays = 0;
+      for (let d = new Date(p.start); d.getTime() <= today0; d.setDate(d.getDate() + 1)) {
+        const n = byDay.get(dayKey(d.getTime())) || 0;
+        days++; total += n;
+        if (n >= HEAVY_DAY) heavyDays++;
+        if (n === 0) dryDays++;
+      }
+      p.days = days; p.total = total; p.heavyDays = heavyDays; p.dryDays = dryDays;
+      p.drinks = entries.filter((e) => e.ts >= p.start && e.ts < endTs).length;
+      // Weekly average over the elapsed part of the period (at least one full week, so day 2 does not extrapolate).
+      p.avgWeek = p.key === "Settimana" ? total : total / (Math.max(days, 7) / 7);
+    }
+    const fmt1 = (x) => (Math.round(x * 10) / 10).toLocaleString("it-IT");
+    const rows = [
+      ["Unità", (p) => fmtU(p.total)],
+      ["Drink", (p) => String(p.drinks)],
+      ["Media a settimana", (p) => fmt1(p.avgWeek), (p) => p.avgWeek >= HEAVY_WEEK],
+      ["Giorni con " + HEAVY_DAY + "+ unità", (p) => String(p.heavyDays), (p) => p.heavyDays > 0],
+      ["Giorni senza alcol", (p) => p.dryDays + " su " + p.days],
+    ];
+    const tbody = els.sum.tBodies[0];
+    tbody.innerHTML = "";
+    for (const [label, val, warn] of rows) {
+      const tr = document.createElement("tr");
+      const th = document.createElement("td"); th.textContent = label; tr.append(th);
+      for (const p of periods) {
+        const td = document.createElement("td"); td.textContent = loaded ? val(p) : "-";
+        if (loaded && warn && warn(p)) td.className = "warn";
+        tr.append(td);
+      }
+      tbody.append(tr);
+    }
+
+    // Gauge: weekly average per period against the 15/week threshold.
+    const scaleMax = Math.max(21, Math.ceil(Math.max(...periods.map((p) => p.avgWeek)) / 7) * 7);
+    const pct = (x) => Math.min(100, (x / scaleMax) * 100);
+    els.gauge.innerHTML = "";
+    for (const p of periods) {
+      const row = document.createElement("div"); row.className = "g-row";
+      const l = document.createElement("span"); l.className = "g-l"; l.textContent = p.key;
+      const track = document.createElement("div"); track.className = "g-track";
+      const fill = document.createElement("div"); fill.className = "g-fill" + (p.avgWeek >= HEAVY_WEEK ? " over" : "");
+      fill.style.width = pct(loaded ? p.avgWeek : 0) + "%";
+      const mark = document.createElement("div"); mark.className = "g-mark"; mark.style.left = "calc(" + pct(HEAVY_WEEK) + "% - 1px)";
+      track.append(fill, mark);
+      const v = document.createElement("span"); v.className = "g-v"; v.textContent = loaded ? fmt1(p.avgWeek) : "-";
+      row.append(l, track, v);
+      row.setAttribute("aria-label", p.key + ": media " + fmt1(p.avgWeek) + " unità a settimana, soglia " + HEAVY_WEEK);
+      els.gauge.append(row);
+    }
+    const scale = document.createElement("div"); scale.className = "g-scale";
+    const ticks = document.createElement("div"); ticks.className = "g-ticks";
+    for (const [x, t] of [[0, "0"], [HEAVY_WEEK, HEAVY_WEEK + " soglia"], [scaleMax, String(scaleMax)]]) {
+      const sp = document.createElement("span"); sp.textContent = t; sp.style.left = pct(x) + "%";
+      if (x === 0) sp.style.transform = "none";
+      if (x === scaleMax) sp.style.transform = "translateX(-100%)";
+      ticks.append(sp);
+    }
+    scale.append(document.createElement("span"), ticks, document.createElement("span"));
+    els.gauge.append(scale);
+  }
+
+  // ---------- estimated blood alcohol (Widmark) ----------
+  // BAC [g/L] = alcohol absorbed [g] / (r * weight [kg]) minus elimination beta * hours.
+  // Each drink is absorbed linearly over ABSORB_MIN minutes; elimination is zero-order while BAC > 0.
+  const GRAMS_PER_UNIT = 14;
+  const R = { m: 0.68, f: 0.55 };
+  const BETA = 0.15;            // g/L per hour
+  const ABSORB_MIN = 30;
+  const REBOUND_ENTER = 0.1;    // g/L on the falling limb where rebound arousal becomes plausible
+  const REBOUND_AFTER_MIN = 90; // minutes after BAC reaches zero
+  const LB = 0.45359237;
+  let profile = null;           // { weightKg, sex }
+  let selDay = null;            // dayKey shown in the BAC panel; null = live view
+  let refDay = null;            // dayKey the stats are computed up to; null = today
+  let profileReady = false;
+
+  function simulateBac(now) {
+    if (!profile) return null;
+    const MIN = 60000;
+    const since = now - 24 * 3600000;
+    const drinks = entries.filter((e) => e.ts >= since && e.ts <= now).map((e) => ({ ts: e.ts, g: e.units * GRAMS_PER_UNIT }));
+    if (!drinks.length) return { now: 0, points: [], start: now, end: now, zeroAt: null, peak: 0, wake: null };
+    const vd = R[profile.sex] * profile.weightKg;  // litres of body water equivalent
+    const t0 = Math.floor(Math.min(...drinks.map((d) => d.ts)) / MIN) * MIN;
+    const elimPerMin = BETA / 60;
+    const pts = [];
+    let bac = 0, t = t0, nowBac = 0;
+    const limit = now + 24 * 3600000;
+    while (t <= limit) {
+      let gIn = 0;
+      for (const d of drinks) {
+        const a = Math.max(t, d.ts), b = Math.min(t + MIN, d.ts + ABSORB_MIN * MIN);
+        if (b > a) gIn += d.g * (b - a) / (ABSORB_MIN * MIN);
+      }
+      bac = Math.max(0, bac + gIn / vd - (bac > 0 || gIn > 0 ? elimPerMin : 0));
+      t += MIN;
+      pts.push([t, bac]);
+      if (t <= now) nowBac = bac;
+      const absorbing = drinks.some((d) => d.ts + ABSORB_MIN * MIN > t);
+      if (t > now && bac === 0 && !absorbing) break;
+    }
+    // Most recent episode: the last transition from BAC > 0 to 0 (null if still above zero at the horizon).
+    let zc = -1;
+    if (pts.length && pts[pts.length - 1][1] === 0) {
+      for (let i = pts.length - 1; i > 0; i--) { if (pts[i][1] === 0 && pts[i - 1][1] > 0) { zc = i; break; } }
+    }
+    const endIdx = zc >= 0 ? zc : pts.length - 1;
+    let startIdx = 0;
+    for (let i = endIdx - 1; i >= 0; i--) { if (pts[i][1] === 0) { startIdx = i; break; } }
+    const points = pts.slice(startIdx, endIdx + 1).filter((p) => p[0] >= now - 12 * 3600000);
+    const zeroAt = zc >= 0 ? pts[zc][0] : null;
+    const { peak, peakAt, wake } = episodeShape(points, zeroAt, 0);
+    return { now: nowBac, points, start: points.length ? points[0][0] : now, end: wake ? wake.to : (zeroAt || (points.length ? points[points.length - 1][0] : now)), zeroAt, peak, peakAt, wake };
+  }
+
+  // Peak over all points; rebound window from the last episode (starting at lastStart) crossing
+  // REBOUND_ENTER on its falling limb to REBOUND_AFTER_MIN past zero. Extends points with the flat tail.
+  function episodeShape(points, zeroAt, lastStart) {
+    const MIN = 60000;
+    let peakI = 0;
+    points.forEach((p, i) => { if (p[1] > points[peakI][1]) peakI = i; });
+    const peak = points.length ? points[peakI][1] : 0;
+    const peakAt = points.length ? points[peakI][0] : null;
+    let wake = null;
+    if (zeroAt && peak > 0) {
+      let lastPeakI = lastStart;
+      for (let i = lastStart; i < points.length; i++) if (points[i][1] > points[lastPeakI][1]) lastPeakI = i;
+      let from = zeroAt;
+      for (let i = lastPeakI; i < points.length; i++) { if (points[i][1] <= REBOUND_ENTER) { from = points[i][0]; break; } }
+      wake = { from, center: zeroAt, to: zeroAt + REBOUND_AFTER_MIN * MIN };
+      for (let t2 = zeroAt + 5 * MIN; t2 <= wake.to; t2 += 5 * MIN) points.push([t2, 0]);
+    }
+    return { peak, peakAt, wake };
+  }
+
+  // Whole curve for one calendar day: from the start of the episode containing the day's first drink
+  // until BAC returns to zero after its last one (drinks after midnight count while BAC is still above zero).
+  function simulateDay(key) {
+    if (!profile) return null;
+    const MIN = 60000, HR = 3600000;
+    const [y, m, d] = key.split("-").map(Number);
+    const d0 = new Date(y, m - 1, d).getTime(), d1 = new Date(y, m - 1, d + 1).getTime();
+    const drinks = entries.filter((e) => e.ts >= d0 - 24 * HR && e.ts < d1 + 24 * HR)
+      .map((e) => ({ ts: e.ts, g: e.units * GRAMS_PER_UNIT })).sort((a, b) => a.ts - b.ts);
+    const inDay = drinks.filter((x) => x.ts >= d0 && x.ts < d1);
+    if (!inDay.length) return null;
+    const vd = R[profile.sex] * profile.weightKg;
+    const elimPerMin = BETA / 60;
+    const firstIn = inDay[0].ts, lastIn = inDay[inDay.length - 1].ts;
+    const pts = [];
+    let bac = 0, t = Math.floor(drinks[0].ts / MIN) * MIN, firstIdx = -1;
+    const limit = d1 + 48 * HR;
+    while (t <= limit) {
+      let gIn = 0;
+      for (const x of drinks) {
+        const a = Math.max(t, x.ts), b = Math.min(t + MIN, x.ts + ABSORB_MIN * MIN);
+        if (b > a) gIn += x.g * (b - a) / (ABSORB_MIN * MIN);
+      }
+      bac = Math.max(0, bac + gIn / vd - (bac > 0 || gIn > 0 ? elimPerMin : 0));
+      t += MIN;
+      pts.push([t, bac]);
+      if (firstIdx < 0 && t > firstIn) firstIdx = pts.length - 1;
+      const absorbing = drinks.some((x) => x.ts < t && x.ts + ABSORB_MIN * MIN > t);
+      if (t > lastIn && bac === 0 && !absorbing) break;
+    }
+    let startIdx = 0;
+    for (let i = Math.max(0, firstIdx) - 1; i >= 0; i--) { if (pts[i][1] === 0) { startIdx = i; break; } }
+    const points = pts.slice(startIdx);
+    const ended = points.length > 1 && points[points.length - 1][1] === 0;
+    const zeroAt = ended ? points[points.length - 1][0] : null;
+    let lastStart = 0;
+    if (ended) for (let i = points.length - 2; i >= 0; i--) { if (points[i][1] === 0) { lastStart = i; break; } }
+    const { peak, peakAt, wake } = episodeShape(points, zeroAt, lastStart);
+    return { points, start: points[0][0], end: wake ? wake.to : points[points.length - 1][0], zeroAt, peak, peakAt, wake };
+  }
+
+  function selectDay(key) {
+    const today = dayKey(Date.now());
+    const next = key === today || key === selDay ? null : key;
+    const changed = next !== selDay;
+    selDay = next;
+    render();
+    if (changed && (next || key === today)) {
+      const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      els.bac.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    }
+  }
+  els.bacBack.addEventListener("click", () => { if (refDay) setRefDay(null); else selectDay(dayKey(Date.now())); });
+
+  function renderAsof(ref0) {
+    els.refDate.max = dayKey(Date.now());
+    if (entries.length) els.refDate.min = dayKey(entries[entries.length - 1].ts);
+    if (document.activeElement !== els.refDate) els.refDate.value = dayKey(ref0);
+    els.refReset.hidden = !refDay;
+    els.asof.classList.toggle("past", !!refDay);
+    els.sumH.textContent = refDay ? "Riepilogo al " + fmtDayLong.format(ref0) : "Riepilogo";
+  }
+
+  // Picking a past date moves stats, week bars and summary to that day and shows its BAC curve.
+  function setRefDay(key) {
+    const next = !key || key >= dayKey(Date.now()) ? null : key;
+    refDay = next;
+    selDay = next;
+    render();
+  }
+  els.refDate.addEventListener("change", () => setRefDay(els.refDate.value));
+  els.refDate.addEventListener("blur", () => render());
+  els.refReset.addEventListener("click", () => setRefDay(null));
+
+  const fmtBac = (x) => x.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPct = (x) => (x / 10).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 }) + "% BAC";
+
+  function renderBac() {
+    if (!loaded || !profileReady) return;
+    if (selDay && selDay === dayKey(Date.now())) selDay = null;
+    els.bacDay.hidden = !selDay;
+    if (selDay) {
+      const [y, m, d] = selDay.split("-").map(Number);
+      els.bacDayL.textContent = fmtDayLong.format(new Date(y, m - 1, d));
+    }
+    if (profile && selDay) { renderBacDay(); return; }
+    if (!profile) {
+      els.bacV.textContent = "-"; els.bacPct.textContent = "";
+      els.bacSub.textContent = "Inserisci peso e sesso per calcolare la stima.";
+      els.bacChart.hidden = true;
+      if (els.pForm.hidden) openProfile();
+      return;
+    }
+    const now = Date.now();
+    const sim = simulateBac(now);
+    els.bacV.textContent = fmtBac(sim.now);
+    els.bacPct.textContent = "(" + fmtPct(sim.now) + ")";
+    els.bacSub.innerHTML = "";
+    const episode = sim.points.length > 1 && (sim.now > 0 || (sim.wake && sim.wake.to > now));
+    if (!episode) {
+      els.bacSub.textContent = "Nessun alcol in circolo stimato.";
+      els.bacChart.hidden = true;
+      return;
+    }
+    const b1 = document.createElement("b"); b1.textContent = fmtBac(sim.peak) + " g/L";
+    const parts = ["Picco ", b1];
+    if (sim.zeroAt) {
+      const b2 = document.createElement("b");
+      const sameDay = dayKey(sim.zeroAt) === dayKey(now);
+      b2.textContent = fmtTime.format(sim.zeroAt);
+      parts.push(sim.zeroAt > now ? ", ritorno a zero stimato " + (sameDay ? "" : "domani ") + "verso le " : ", tornata a zero verso le ", b2);
+    }
+    if (sim.wake && sim.wake.to > now) {
+      const line = document.createElement("span"); line.className = "wake-l";
+      const w = document.createElement("b");
+      w.textContent = fmtTime.format(sim.wake.from) + " - " + fmtTime.format(sim.wake.to);
+      const lbl = sim.wake.from > now ? "Possibile risveglio " + (dayKey(sim.wake.from) === dayKey(now) ? "" : "domani ") + "tra " : "Finestra di possibile risveglio in corso: ";
+      line.append(lbl, w, ", più probabile verso le " + fmtTime.format(sim.wake.center));
+      parts.push(line);
+    }
+    els.bacSub.append(...parts);
+    els.bacChart.hidden = false;
+    drawBac(sim, now);
+  }
+
+  function renderBacDay() {
+    const sim = simulateDay(selDay);
+    els.bacSub.innerHTML = "";
+    if (!sim || sim.points.length < 2) {
+      els.bacV.textContent = "-"; els.bacPct.textContent = "";
+      els.bacSub.textContent = "Nessuna unità registrata in questo giorno.";
+      els.bacChart.hidden = true;
+      return;
+    }
+    const bold = (txt) => { const b = document.createElement("b"); b.textContent = txt; return b; };
+    els.bacV.textContent = fmtBac(sim.peak);
+    els.bacPct.textContent = "(picco, " + fmtPct(sim.peak) + ")";
+    const parts = ["Picco alle ", bold(fmtTime.format(sim.peakAt))];
+    if (sim.zeroAt) {
+      parts.push(", ritorno a zero verso le ", bold(fmtTime.format(sim.zeroAt)));
+      if (dayKey(sim.zeroAt) !== selDay) parts.push(" del giorno dopo");
+    }
+    if (sim.wake) {
+      const line = document.createElement("span"); line.className = "wake-l";
+      line.append("Finestra di possibile risveglio: ", bold(fmtTime.format(sim.wake.from) + " - " + fmtTime.format(sim.wake.to)));
+      parts.push(line);
+    }
+    els.bacSub.append(...parts);
+    els.bacChart.hidden = false;
+    drawBac(sim, null);
+  }
+
+  let bacGeom = null;
+  function drawBac(sim, now) {
+    const W = 320, H = 120, padL = 30, padR = 6, padT = 18, padB = 18;
+    const live = now != null;
+    const t0 = sim.start, t1 = live ? Math.max(sim.end, now + 30 * 60000) : sim.end;
+    const wake = sim.wake;
+    const yMax = Math.max(0.2, Math.ceil(sim.peak * 1.2 * 10) / 10);
+    const x = (t) => padL + (t - t0) / (t1 - t0) * (W - padL - padR);
+    const y = (v) => H - padB - v / yMax * (H - padT - padB);
+    const ns = "http://www.w3.org/2000/svg";
+    const el = (tag, attrs) => { const n = document.createElementNS(ns, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+    const svg = els.bacSvg;
+    svg.innerHTML = "";
+    // grid + y labels: 0, mid, top
+    for (const v of [0, yMax / 2, yMax]) {
+      svg.append(el("line", { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: "grid" }));
+      const tx = el("text", { x: padL - 4, y: y(v) + 3, "text-anchor": "end", class: "axis-t" });
+      tx.textContent = fmtBac(v).replace(/0$/, ""); svg.append(tx);
+    }
+    // x labels: start, now, end
+    const xl = live ? [[t0, fmtTime.format(t0), "start"], [now, "ora", "middle"], [t1, fmtTime.format(t1), "end"]]
+      : [[t0, fmtTime.format(t0), "start"], [t1, fmtTime.format(t1), "end"]];
+    for (const [t, label, anchor] of xl) {
+      const tx = el("text", { x: x(t), y: H - 4, "text-anchor": anchor, class: "axis-t" });
+      tx.textContent = label; svg.append(tx);
+    }
+    if (wake) {
+      const wx0 = x(Math.max(t0, wake.from)), wx1 = x(Math.min(t1, wake.to));
+      svg.append(el("rect", { x: wx0, y: padT - 6, width: Math.max(0, wx1 - wx0), height: H - padB - padT + 6, class: "wake" }));
+      svg.append(el("line", { x1: x(wake.center), x2: x(wake.center), y1: padT - 6, y2: H - padB, class: "wake-c" }));
+      const wt = el("text", { x: (wx0 + wx1) / 2, y: padT - 8, "text-anchor": "middle", class: "wake-t" });
+      wt.textContent = "risveglio?"; svg.append(wt);
+    }
+    const past = live ? sim.points.filter((p) => p[0] <= now) : sim.points;
+    const fut = live ? sim.points.filter((p) => p[0] >= now - 60000) : [];
+    const path = (pts) => pts.map((p, i) => (i ? "L" : "M") + x(p[0]).toFixed(1) + " " + y(p[1]).toFixed(1)).join("");
+    if (sim.points.length) {
+      const all = sim.points;
+      svg.append(el("path", { d: path(all) + "L" + x(all[all.length - 1][0]).toFixed(1) + " " + y(0) + "L" + x(all[0][0]).toFixed(1) + " " + y(0) + "Z", class: "area" }));
+    }
+    if (past.length > 1) svg.append(el("path", { d: path(past), class: "line" }));
+    if (fut.length > 1) svg.append(el("path", { d: path(fut), class: "line proj" }));
+    if (live) svg.append(el("line", { x1: x(now), x2: x(now), y1: padT - 6, y2: H - padB, class: "now" }));
+    const cross = el("line", { x1: 0, x2: 0, y1: padT - 6, y2: H - padB, class: "cross", visibility: "hidden" });
+    svg.append(cross);
+    // "now" dot as HTML so it stays round under preserveAspectRatio="none"
+    els.bacChart.querySelectorAll(".bac-dot").forEach((n) => n.remove());
+    if (live) {
+    const dot = document.createElement("span"); dot.className = "bac-dot";
+    dot.style.left = (x(now) / W * 100) + "%"; dot.style.top = (y(sim.now) / H * 100) + "%";
+    els.bacChart.append(dot);
+    }
+    bacGeom = { sim, t0, t1, W, padL, padR, cross, x };
+  }
+
+  function bacHover(ev) {
+    if (!bacGeom) return;
+    const { sim, t0, t1, W, padL, padR, cross } = bacGeom;
+    const r = els.bacSvg.getBoundingClientRect();
+    const fx = (ev.clientX - r.left) / r.width * W;
+    const t = t0 + (fx - padL) / (W - padL - padR) * (t1 - t0);
+    if (t < t0 || t > t1 || !sim.points.length) { bacLeave(); return; }
+    let best = sim.points[0];
+    for (const p of sim.points) if (Math.abs(p[0] - t) < Math.abs(best[0] - t)) best = p;
+    const px = bacGeom.x(best[0]);
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    const inWake = sim.wake && best[0] >= sim.wake.from && best[0] <= sim.wake.to;
+    els.bacTip.textContent = fmtTime.format(best[0]) + "  " + fmtBac(best[1]) + " g/L" + (best[0] > Date.now() ? " (stima)" : "") + (inWake ? " · rimbalzo" : "");
+    const pct = Math.min(85, Math.max(15, px / W * 100));
+    els.bacTip.style.left = pct + "%";
+    els.bacTip.hidden = false;
+  }
+  function bacLeave() { if (bacGeom) bacGeom.cross.setAttribute("visibility", "hidden"); els.bacTip.hidden = true; }
+  els.bacChart.addEventListener("pointermove", bacHover);
+  els.bacChart.addEventListener("pointerdown", bacHover);
+  els.bacChart.addEventListener("pointerleave", bacLeave);
+
+  function openProfile() {
+    els.pErr.textContent = "";
+    if (profile) { els.pWunit.value = "kg"; els.pWeight.value = String(Math.round(profile.weightKg * 2) / 2); els.pSex.value = profile.sex; }
+    els.pForm.hidden = false;
+  }
+  els.bacEdit.addEventListener("click", () => { if (els.pForm.hidden) openProfile(); else if (profile) els.pForm.hidden = true; });
+  els.pWunit.addEventListener("change", () => {
+    const v = Number(els.pWeight.value);
+    if (v > 0) els.pWeight.value = String(Math.round((els.pWunit.value === "lb" ? v / LB : v * LB) * 2) / 2);
+  });
+  els.pForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const raw = Number(els.pWeight.value);
+    const kg = els.pWunit.value === "lb" ? raw * LB : raw;
+    if (!(kg >= 30 && kg <= 300)) { els.pErr.textContent = "Inserisci un peso tra 30 e 300 kg (66 e 660 lb)"; return; }
+    const next = { weightKg: Math.round(kg * 10) / 10, sex: els.pSex.value === "f" ? "f" : "m" };
+    profile = next;
+    els.pForm.hidden = true;
+    renderBac();
+    store.set(LS.profile, next);
+    queue({ op: "profile", profile: next });
+  });
+
+  function setSync(state, text) {
+    els.drive.className = "drive " + state;
+    els.driveStatus.innerHTML = '<span class="dot"></span>';
+    els.driveStatus.append(text);
+  }
+
+  function renderSync() {
+    const hasLink = !!(meta && meta.sheetUrl);
+    if (hasLink) els.driveLink.href = meta.sheetUrl;
+    els.driveLink.hidden = !hasLink || !config;
+    els.setup.hidden = !!config && !editingConfig;
+    els.cCancel.hidden = !config;
+    els.cfg.hidden = !config || editingConfig;
+    els.sync.hidden = !config;
+    const n = outbox.length;
+    const pending = n === 1 ? "1 modifica in coda" : n + " modifiche in coda";
+    if (!config) { setSync("", "Foglio Google non collegato" + (n ? " (" + pending + ")" : "")); return; }
+    if (syncing) { setSync("busy", "Sincronizzazione con il foglio…"); return; }
+    if (navigator.onLine === false) { setSync("", "Offline" + (n ? ": " + pending + ", parte al ritorno della rete" : "")); return; }
+    if (syncError) { setSync("err", syncError + (n ? " (" + pending + ")" : "")); return; }
+    if (n) { setSync("busy", pending); return; }
+    if (meta && meta.syncedAt) {
+      const d = new Date(meta.syncedAt);
+      const when = dayKey(meta.syncedAt) === dayKey(Date.now()) ? "alle " + fmtTime.format(d) : fmtDate.format(d) + " " + fmtTime.format(d);
+      setSync("ok", "Sincronizzato con il foglio " + when);
+    } else setSync("", "In attesa della prima sincronizzazione");
+  }
+
+  // ---------- local copy + outbox ----------
+  const normEntry = (v) => { const ts = Number(v && v.ts) || 0; return { id: String(v && v.id), ts, units: Number(v && v.units) || 1, lastTap: Number(v && v.lastTap) || ts, manual: !!v && v.manual === true }; };
+  const normProfile = (v) => v && Number(v.weightKg) > 0 ? { weightKg: Number(v.weightKg), sex: v.sex === "f" ? "f" : "m" } : null;
+
+  function saveEntries() {
+    if (!store.set(LS.entries, entries)) showToast("Memoria del browser non disponibile: la modifica resta solo in questa sessione", true);
+  }
+
+  // Only the latest operation per drink (or for the profile) has to reach the sheet.
+  function queue(op) {
+    outbox = outbox.filter((o) => op.op === "profile" ? o.op !== "profile" : o.op === "profile" || o.id !== op.id);
+    outbox.push({ ...op, seq: ++seq });
+    store.set(LS.outbox, outbox);
+    renderSync();
+    scheduleSync(1500);
+  }
+
+  function applyOps(base, ops) {
+    const map = new Map(base.map((e) => [e.id, e]));
+    for (const o of ops) {
+      if (o.op === "upsert") map.set(o.id, normEntry({ ...o.entry, id: o.id }));
+      else if (o.op === "delete") map.delete(o.id);
+    }
+    return [...map.values()].sort((a, b) => b.ts - a.ts);
+  }
+
+  // ---------- actions ----------
+  function newId(ts) { return ts.toString(36) + "-" + Math.random().toString(36).slice(2, 7); }
+
+  // Taps less than MERGE_MS after the previous tap on the same drink add a unit to that drink.
+  const MERGE_MS = 60 * 1000;
+
+  function persist(entry) {
+    saveEntries();
+    queue({ op: "upsert", id: entry.id, entry: { ts: entry.ts, units: entry.units, lastTap: entry.lastTap, manual: entry.manual === true } });
+  }
+  function unpersist(id) {
+    saveEntries();
+    queue({ op: "delete", id });
+  }
+
+  function addUnit(amount, btn) {
+    if (!loaded) return;
+    const now = Date.now();
+    btn.classList.remove("pop"); void btn.offsetWidth; btn.classList.add("pop");
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch { /* ignore */ } }
+
+    const head = entries[0];
+    let entry;
+    if (head && !head.manual && now - (head.lastTap || head.ts) <= MERGE_MS) {
+      undoState = { id: head.id, prev: { ...head } };
+      entry = { ...head, units: head.units + amount, lastTap: now };
+      entries = [entry, ...entries.slice(1)];
+      showToast("Drink delle " + fmtTime.format(entry.ts) + ": " + unitsLabel(entry.units));
+    } else {
+      entry = { id: newId(now), ts: now, units: amount, lastTap: now };
+      undoState = { id: entry.id, prev: null };
+      entries = [entry, ...entries];
+      showToast("Aggiunta " + unitsLabel(amount) + " alle " + fmtTime.format(now));
+    }
+    render();
+    persist(entry);
+  }
+
+  function removeEntry(id) {
+    entries = entries.filter((e) => e.id !== id);
+    render();
+    unpersist(id);
+  }
+
+  function hideToast() { els.toast.hidden = true; undoState = null; clearTimeout(toastTimer); }
+
+  function showToast(msg, isError = false) {
+    els.toastMsg.textContent = msg;
+    els.undo.hidden = isError || !undoState;
+    if (isError) undoState = null;
+    els.toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, isError ? 6000 : 8000);
+  }
+
+  // Manual entries: a past drink with a chosen time and unit count; never merged with taps.
+  const pad = (n) => String(n).padStart(2, "0");
+  function resetManualForm() {
+    const d = new Date();
+    els.mDate.value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    els.mTime.value = pad(d.getHours()) + ":" + pad(d.getMinutes());
+    els.mDate.max = els.mDate.value;
+    els.mUnits.value = "1";
+    els.mErr.textContent = "";
+  }
+  els.manual.addEventListener("toggle", () => { if (els.manual.open) resetManualForm(); });
+  els.mForm.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    if (!loaded) return;
+    const [y, m, d] = (els.mDate.value || "").split("-").map(Number);
+    const [hh, mm] = (els.mTime.value || "").split(":").map(Number);
+    const units = Number(els.mUnits.value);
+    if (!y || !m || !d || Number.isNaN(hh) || Number.isNaN(mm) || els.mTime.value === "") { els.mErr.textContent = "Inserisci data e ora"; return; }
+    if (!Number.isInteger(units * 2) || units < 0.5 || units > 20) { els.mErr.textContent = "Le unità vanno da 0,5 a 20, a passi di 0,5"; return; }
+    const ts = new Date(y, m - 1, d, hh, mm).getTime();
+    if (ts > Date.now() + 60000) { els.mErr.textContent = "L'ora è nel futuro"; return; }
+    const entry = { id: newId(ts), ts, units, lastTap: ts, manual: true };
+    entries = [...entries, entry].sort((a, b) => b.ts - a.ts);
+    render();
+    persist(entry);
+    els.manual.open = false;
+    undoState = null;
+    showToast("Aggiunte a mano " + unitsLabel(units) + ", " + fmtDate.format(ts) + " alle " + fmtTime.format(ts));
+  });
+
+  // Undo reverts only the last tap: one unit off a merged drink, or the whole drink if it had one unit.
+  els.undo.addEventListener("click", () => {
+    const u = undoState;
+    hideToast();
+    if (!u) return;
+    if (!u.prev) { removeEntry(u.id); return; }
+    entries = entries.map((e) => e.id === u.id ? u.prev : e);
+    render();
+    persist(u.prev);
+  });
+  els.tap.addEventListener("click", () => addUnit(1, els.tap));
+  els.tapHalf.addEventListener("click", () => addUnit(0.5, els.tapHalf));
+  els.sync.addEventListener("click", () => { clearTimeout(syncTimer); syncNow(); });
+
+  // ---------- sync with the Google Sheet (Apps Script web app) ----------
+  // Each sync sends the outbox and gets the whole log back. Operations are upsert/delete by id,
+  // so resending after a lost reply is harmless. Rows edited by hand in the sheet come back here.
+  const API_URL_RE = /^https:\/\/script\.google\.com\/(a\/macros\/[\w.-]+|macros)\/s\/[\w-]+\/exec$/;
+  const LOCAL_PAGE = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const validApiUrl = (u) => API_URL_RE.test(u) || (LOCAL_PAGE && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(u));
+
+  function scheduleSync(delay = 1500) {
+    if (!config) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncNow, delay);
+  }
+
+  async function callApi(body) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    try {
+      // text/plain keeps this a "simple" cross-origin request: an Apps Script web app cannot answer a CORS preflight.
+      const res = await fetch(config.url, {
+        method: "POST", redirect: "follow", signal: ctrl.signal,
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ token: config.token, ...body }),
+      });
+      if (!res.ok) throw { code: "http", message: "HTTP " + res.status };
+      let data = null;
+      try { data = await res.json(); } catch { throw { code: "bad_response" }; }
+      if (!data || data.ok !== true) throw { code: (data && data.error) || "bad_response", message: data && data.message };
+      return data;
+    } catch (err) {
+      if (err && err.code) throw err;
+      throw { code: navigator.onLine === false ? "offline" : "network" };
+    } finally { clearTimeout(timer); }
+  }
+
+  function syncErrorText(err) {
+    switch (err && err.code) {
+      case "offline": return "Sei offline";
+      case "unauthorized": return "Token rifiutato dallo script: controlla il collegamento";
+      case "busy": return "Script occupato, riprovo tra poco";
+      case "server_error": return "Errore nello script: " + (err.message || "sconosciuto");
+      case "http": return "Lo script ha risposto con un errore (" + err.message + ")";
+      case "bad_response": return "Risposta inattesa: verifica che l'URL sia quello che finisce con /exec e che l'accesso della web app sia \"Chiunque\"";
+      default: return "Script non raggiungibile: verifica la rete, l'URL e che l'accesso della web app sia \"Chiunque\"";
+    }
+  }
+
+  /** @returns {Promise<boolean>} true when the sheet confirmed the sync */
+  async function syncNow() {
+    clearTimeout(syncTimer);
+    if (!config || !loaded) return false;
+    if (syncing) { syncAgain = true; return false; }
+    syncing = true; syncError = "";
+    renderSync();
+    const sent = outbox.slice();
+    const maxSeq = sent.reduce((m, o) => Math.max(m, o.seq), 0);
+    let ok = false, retry = false;
+    try {
+      const data = await callApi({ action: "sync", tz: TZ, ops: sent.map(({ seq: _seq, ...op }) => op) });
+      // Changes made while the request was in flight stay queued and are replayed on top of the sheet's state.
+      outbox = outbox.filter((o) => o.seq > maxSeq);
+      store.set(LS.outbox, outbox);
+      entries = applyOps((Array.isArray(data.entries) ? data.entries : []).map(normEntry).filter((e) => e.ts > 0 && e.id), outbox);
+      store.set(LS.entries, entries);
+      if (!outbox.some((o) => o.op === "profile")) {
+        const remote = normProfile(data.profile);
+        if (remote) { profile = remote; store.set(LS.profile, profile); els.pForm.hidden = true; }
+        else if (profile) queue({ op: "profile", profile });
+      }
+      meta = { sheetUrl: typeof data.sheetUrl === "string" && data.sheetUrl.startsWith("https://docs.google.com/") ? data.sheetUrl : "", syncedAt: Date.now() };
+      store.set(LS.meta, meta);
+      ok = true;
+    } catch (err) {
+      syncError = syncErrorText(err);
+      retry = !["unauthorized", "bad_response"].includes(err && err.code);
+    } finally {
+      syncing = false;
+      render();
+      if (ok && (syncAgain || outbox.length)) scheduleSync(1500);
+      else if (!ok && retry && outbox.length) scheduleSync(30000);
+      syncAgain = false;
+    }
+    return ok;
+  }
+
+  // ---------- connection settings ----------
+  function openSetup() {
+    editingConfig = true;
+    els.cErr.textContent = "";
+    els.cUrl.value = config ? config.url : "";
+    els.cToken.value = "";
+    els.cToken.placeholder = config ? "Lascia vuoto per tenere quello attuale" : "";
+    renderSync();
+    els.setup.scrollIntoView({ block: "start" });
+  }
+  els.cfg.addEventListener("click", openSetup);
+  els.cCancel.addEventListener("click", () => { editingConfig = false; renderSync(); });
+  els.setupForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const url = els.cUrl.value.trim();
+    const token = els.cToken.value.trim() || (config && config.url === url ? config.token : "");
+    if (!validApiUrl(url)) { els.cErr.textContent = "Serve l'URL della web app: https://script.google.com/macros/s/…/exec"; return; }
+    if (!token) { els.cErr.textContent = "Inserisci il token"; return; }
+    if (syncing) { els.cErr.textContent = "Sincronizzazione in corso, riprova tra un attimo"; return; }
+    els.cErr.textContent = "";
+    els.cSubmit.disabled = true; els.cSubmit.textContent = "Collegamento…";
+    const prev = config;
+    config = { url, token };
+    editingConfig = true;   // keep the form on screen while the candidate settings are tested
+    const ok = await syncNow();
+    els.cSubmit.disabled = false; els.cSubmit.textContent = "Collega";
+    if (ok) {
+      store.set(LS.config, config);
+      editingConfig = false;
+      els.cToken.value = "";
+      undoState = null;   // this toast is not about a tap: no Undo on it
+      showToast("Foglio collegato: " + entries.length + " drink nello storico");
+    } else {
+      els.cErr.textContent = syncError;
+      config = prev; syncError = "";
+    }
+    render();
+  });
+
+  // ---------- boot ----------
+  {
+    const savedEntries = store.get(LS.entries, []);
+    entries = (Array.isArray(savedEntries) ? savedEntries : []).map(normEntry).filter((e) => e.ts > 0 && e.id).sort((a, b) => b.ts - a.ts);
+    const savedOutbox = store.get(LS.outbox, []);
+    outbox = (Array.isArray(savedOutbox) ? savedOutbox : []).filter((o) => o && typeof o.seq === "number" && typeof o.op === "string");
+    seq = outbox.reduce((m, o) => Math.max(m, o.seq), 0);
+    profile = normProfile(store.get(LS.profile, null));
+    const savedConfig = store.get(LS.config, null);
+    config = savedConfig && typeof savedConfig.url === "string" && typeof savedConfig.token === "string" && validApiUrl(savedConfig.url) ? { url: savedConfig.url, token: savedConfig.token } : null;
+    meta = store.get(LS.meta, null);
+    profileReady = true;
+    loaded = true;
+  }
+  render();
+  syncNow();
+
+  window.addEventListener("online", () => { renderSync(); syncNow(); });
+  window.addEventListener("offline", renderSync);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !config) return;
+    render();
+    if (outbox.length || !meta || Date.now() - (meta.syncedAt || 0) > 60000) syncNow();
+  });
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(() => {}); });
+  }
+
+  // keep "today" correct across midnight
+  setInterval(() => { if (loaded) render(); }, 60000);
+})();
+</script>
+</body>
+</html>
