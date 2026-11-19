@@ -224,6 +224,27 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px
 .asof input { font: 15px var(--f-body); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; min-width: 0; }
 .asof input:focus { outline: 2px solid var(--amber); outline-offset: 0; border-color: transparent; }
 .day.is-ref .bar-d { color: var(--fg); font-weight: 600; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.cal-head h2 { margin: 0; }
+.cal-nav { display: flex; align-items: center; gap: 4px; }
+.cal-nav .btn-link { font-size: 18px; line-height: 1; padding: 4px 8px; }
+.cal-nav .btn-link:disabled { color: var(--line); cursor: default; }
+.cal-title { font-size: 14px; font-weight: 600; text-transform: capitalize; min-width: 112px; text-align: center; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-wd { font-size: 11px; color: var(--muted); text-align: center; text-transform: uppercase; letter-spacing: .06em; padding-bottom: 2px; }
+.cal-d { position: relative; aspect-ratio: 1; max-height: 52px; width: 100%; display: flex; align-items: center; justify-content: center; background: none; border: 0; padding: 0; font: 500 13px var(--f-mono); color: var(--fg); font-variant-numeric: tabular-nums; border-radius: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.cal-d:disabled { cursor: default; }
+.cal-d.out { color: var(--muted); opacity: .45; }
+.cal-d .c { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: var(--amber); }
+.cal-d.heavy .c { background: var(--danger); }
+.cal-d .n { position: relative; }
+.cal-d.ink .n { color: var(--amber-ink); font-weight: 600; }
+.cal-d.heavy.ink .n { color: #fff; }
+.cal-d.is-today { box-shadow: inset 0 0 0 1.5px var(--fg); }
+.cal-d.is-sel { box-shadow: inset 0 0 0 2px var(--amber); background: var(--amber-soft); }
+.cal-d:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.cal-foot { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.cal-foot b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .setup { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--amber); border-radius: 10px; background: var(--surface); }
 .setup h2 { margin: 0; color: var(--fg); }
 .setup form { display: flex; flex-direction: column; gap: 10px; }
@@ -331,6 +352,19 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px
     </div>
   </section>
 
+  <section aria-labelledby="cal-h">
+    <div class="cal-head">
+      <h2 id="cal-h">Calendario</h2>
+      <div class="cal-nav">
+        <button class="btn-link" id="cal-prev" type="button" aria-label="Mese precedente">‹</button>
+        <span class="cal-title" id="cal-title" aria-live="polite"></span>
+        <button class="btn-link" id="cal-next" type="button" aria-label="Mese successivo">›</button>
+      </div>
+    </div>
+    <div class="cal" id="cal" role="grid" aria-labelledby="cal-title"></div>
+    <div class="cal-foot" id="cal-foot"></div>
+  </section>
+
   <section aria-labelledby="streak-h">
     <h2 id="streak-h">Serie più lunghe</h2>
     <div class="streaks">
@@ -401,6 +435,7 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px
   const els = {
     date: $("date"), tap: $("tap"), tapHalf: $("tap-half"), today: $("today"), toast: $("toast"), toastMsg: $("toast-msg"),
     undo: $("undo"), sToday: $("s-today"), s7: $("s-7"), s30: $("s-30"), week: $("week"), log: $("log"),
+    cal: $("cal"), calTitle: $("cal-title"), calPrev: $("cal-prev"), calNext: $("cal-next"), calFoot: $("cal-foot"),
     weekPrev: $("week-prev"), weekNext: $("week-next"), weekRange: $("week-range"),
     stDry: $("st-dry"), stDryS: $("st-dry-s"), stWet: $("st-wet"), stWetS: $("st-wet-s"), stNote: $("st-note"),
     bac: $("bac"), bacDay: $("bac-day"), bacDayL: $("bac-day-l"), bacBack: $("bac-back"), bacV: $("bac-v"), bacPct: $("bac-pct"), bacSub: $("bac-sub"), bacChart: $("bac-chart"), bacSvg: $("bac-svg"), bacTip: $("bac-tip"),
@@ -475,6 +510,7 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px
     const byDay = new Map();
     for (const e of entries) byDay.set(dayKey(e.ts), (byDay.get(dayKey(e.ts)) || 0) + e.units);
     renderWeek(byDay, today0, ref0);
+    renderCalendar(byDay, today0, ref0);
     renderStreaks(byDay, ref0);
 
     // log
@@ -535,6 +571,75 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px
     renderBac();
     renderSync();
   }
+
+  // ---------- month calendar ----------
+  // Circle area grows with the day's units (diameter ~ sqrt), scaled to the heaviest logged day so months compare.
+  // MIN_D (% of the cell) keeps the day number readable inside the smallest circle.
+  const MIN_D = 42;
+  let calMonth = null;          // first day of the month shown (ms); null = follow the reference day
+  let calAnchor;                // reference day the calendar last followed
+  const fmtMonth = new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" });
+  function renderCalendar(byDay, today0, ref0) {
+    const monthOf = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
+    const anchor = refDay || "";
+    if (anchor !== calAnchor || calMonth == null) { calAnchor = anchor; calMonth = monthOf(ref0); }
+    const firstMonth = entries.length ? monthOf(entries[entries.length - 1].ts) : monthOf(today0);
+    const lastMonth = monthOf(today0);
+    calMonth = Math.min(lastMonth, Math.max(firstMonth, calMonth));
+    const firstDay = entries.length ? startOfDay(new Date(entries[entries.length - 1].ts)) : today0;
+    const m0 = new Date(calMonth);
+    const nDays = new Date(m0.getFullYear(), m0.getMonth() + 1, 0).getDate();
+    const lead = (m0.getDay() + 6) % 7; // Monday first
+    let max = 4;
+    for (const v of byDay.values()) if (v > max) max = v;
+
+    els.calTitle.textContent = fmtMonth.format(m0);
+    els.calPrev.disabled = calMonth <= firstMonth;
+    els.calNext.disabled = calMonth >= lastMonth;
+    const g = els.cal;
+    g.innerHTML = "";
+    for (const wd of ["lu", "ma", "me", "gi", "ve", "sa", "do"]) {
+      const h = document.createElement("span"); h.className = "cal-wd"; h.textContent = wd; h.setAttribute("aria-hidden", "true"); g.append(h);
+    }
+    for (let i = 0; i < lead; i++) g.append(document.createElement("span"));
+    let total = 0, wetDays = 0, trackedDays = 0;
+    for (let day = 1; day <= nDays; day++) {
+      const t = new Date(m0.getFullYear(), m0.getMonth(), day).getTime();
+      const key = dayKey(t);
+      const n = byDay.get(key) || 0;
+      const tracked = t >= firstDay && t <= today0;
+      if (tracked) { trackedDays++; total += n; if (n > 0) wetDays++; }
+      const b = document.createElement("button"); b.type = "button";
+      const frac = n ? Math.sqrt(Math.min(n, max) / max) : 0;
+      b.className = "cal-d" + (tracked ? "" : " out") + (t === today0 ? " is-today" : "") + (selDay === key ? " is-sel" : "")
+        + (n >= HEAVY_DAY ? " heavy" : "") + (n ? " ink" : "");
+      b.disabled = !n && t !== today0;
+      if (n) {
+        const c = document.createElement("span"); c.className = "c";
+        const size = Math.round(MIN_D + (100 - MIN_D) * frac) + "%";
+        c.style.width = size; c.style.height = size;
+        b.append(c);
+      }
+      const num = document.createElement("span"); num.className = "n"; num.textContent = String(day);
+      b.append(num);
+      b.title = n ? unitsLabel(n) : "";
+      b.setAttribute("aria-label", fmtDayLong.format(t) + ": " + (tracked || n ? unitsLabel(n) : "non registrato"));
+      b.addEventListener("click", () => selectDay(key));
+      g.append(b);
+    }
+    els.calFoot.innerHTML = "";
+    if (!loaded || !trackedDays) { els.calFoot.textContent = "Nessun giorno registrato in questo mese."; return; }
+    const bt = document.createElement("b"); bt.textContent = unitsLabel(total);
+    const bw = document.createElement("b"); bw.textContent = wetDays + " su " + trackedDays;
+    els.calFoot.append(bt, " in totale, giorni con alcol ", bw, ". Cerchio più grande = più unità, rosso = " + HEAVY_DAY + "+ unità.");
+  }
+  const calStep = (dir) => {
+    const d = new Date(calMonth); d.setMonth(d.getMonth() + dir);
+    calMonth = d.getTime();
+    render();
+  };
+  els.calPrev.addEventListener("click", () => calStep(-1));
+  els.calNext.addEventListener("click", () => calStep(1));
 
   let weekAnchor;              // reference day the strip was last scrolled to; undefined = never
   function renderWeek(byDay, today0, ref0) {
