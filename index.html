@@ -101,8 +101,18 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; margin: 0
 
 h2 { font-family: var(--f-display); font-weight: 500; font-size: 15px; margin: 0 0 10px; color: var(--muted); letter-spacing: .02em; }
 
-.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 132px; }
-.day { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0; }
+.week {
+  display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 48px) / 7); gap: 8px; align-items: end; height: 154px;
+  overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.week::-webkit-scrollbar { display: none; }
+.week-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.week-nav .btn-link { font-size: 13px; }
+.week-nav .btn-link:disabled { visibility: hidden; }
+.day { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0; scroll-snap-align: start; }
+.bar-dn { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: -4px; white-space: nowrap; }
+.bar-dn.month { color: var(--fg); font-weight: 600; }
 .bar-n { font-family: var(--f-mono); font-size: 12px; color: var(--fg); font-variant-numeric: tabular-nums; }
 .bar { width: 100%; max-width: 30px; background: var(--amber); border-radius: 4px 4px 1px 1px; min-height: 2px; }
 .bar.zero { background: var(--line); }
@@ -110,7 +120,7 @@ h2 { font-family: var(--f-display); font-weight: 500; font-size: 15px; margin: 0
 button.day { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; border-radius: 6px; -webkit-tap-highlight-color: transparent; }
 button.day:disabled { cursor: default; }
 button.day:not(:disabled):hover .bar-d { color: var(--fg); }
-button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 .day.is-sel .bar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--fg); }
 .day.is-sel .bar-d { color: var(--fg); font-weight: 700; }
 .hint { font-weight: 400; font-size: 12px; color: var(--muted); }
@@ -120,6 +130,13 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
 .bac-day { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 8px; background: var(--amber-soft); font-size: 14px; }
 .bac-day span { text-transform: capitalize; font-weight: 600; }
 .bar-d { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+.streaks { display: grid; grid-template-columns: 1fr 1fr; border-block: 1px solid var(--line); }
+.streak { padding: 12px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; }
+.streak + .streak { border-left: 1px solid var(--line); }
+.streak .v { font-family: var(--f-mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+.streak .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.streak .s { font-size: 12px; color: var(--muted); }
+.streak .s b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .log { display: flex; flex-direction: column; gap: 14px; }
 .log-day h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; }
@@ -305,8 +322,22 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
   </section>
 
   <section>
-    <h2>Settimana <span class="hint">· tocca un giorno per la sua curva</span></h2>
-    <div class="week" id="week"></div>
+    <h2>Giorni <span class="hint">· scorri per i giorni passati, tocca un giorno per la sua curva</span></h2>
+    <div class="week" id="week" role="group" aria-label="Unità per giorno"></div>
+    <div class="week-nav">
+      <button class="btn-link" id="week-prev" type="button" aria-label="Settimana precedente">‹ Prima</button>
+      <span id="week-range"></span>
+      <button class="btn-link" id="week-next" type="button" aria-label="Settimana successiva">Dopo ›</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="streak-h">
+    <h2 id="streak-h">Serie più lunghe</h2>
+    <div class="streaks">
+      <div class="streak"><span class="v" id="st-dry">-</span><span class="k">Giorni di fila senza alcol</span><span class="s" id="st-dry-s"></span></div>
+      <div class="streak"><span class="v" id="st-wet">-</span><span class="k">Giorni di fila con alcol</span><span class="s" id="st-wet-s"></span></div>
+    </div>
+    <p class="note" id="st-note"></p>
   </section>
 
   <section>
@@ -370,6 +401,8 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
   const els = {
     date: $("date"), tap: $("tap"), tapHalf: $("tap-half"), today: $("today"), toast: $("toast"), toastMsg: $("toast-msg"),
     undo: $("undo"), sToday: $("s-today"), s7: $("s-7"), s30: $("s-30"), week: $("week"), log: $("log"),
+    weekPrev: $("week-prev"), weekNext: $("week-next"), weekRange: $("week-range"),
+    stDry: $("st-dry"), stDryS: $("st-dry-s"), stWet: $("st-wet"), stWetS: $("st-wet-s"), stNote: $("st-note"),
     bac: $("bac"), bacDay: $("bac-day"), bacDayL: $("bac-day-l"), bacBack: $("bac-back"), bacV: $("bac-v"), bacPct: $("bac-pct"), bacSub: $("bac-sub"), bacChart: $("bac-chart"), bacSvg: $("bac-svg"), bacTip: $("bac-tip"),
     bacEdit: $("bac-edit"), pForm: $("bac-form"), pWeight: $("p-weight"), pWunit: $("p-wunit"), pSex: $("p-sex"), pErr: $("p-err"),
     sum: $("sum"), gauge: $("gauge"), manual: $("manual"), mForm: $("manual-form"), mDate: $("m-date"), mTime: $("m-time"), mUnits: $("m-units"), mErr: $("m-err"),
@@ -415,7 +448,7 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
     els.date.textContent = fmtDayLong.format(new Date());
     const now = Date.now();
     const today0 = startOfDay();
-    // Reference day for stats, week bars and summary: the picked date, or today.
+    // Reference day for stats, day bars, streaks and summary: the picked date, or today.
     const ref0 = refDay ? keyStart(refDay) : today0;
     const refEnd = shift(ref0, 1);
     const sumSince = (t0) => entries.reduce((s, e) => s + (e.ts >= t0 ? e.units : 0), 0);
@@ -438,32 +471,11 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
       els.today.append("Oggi ", b, " unità in " + todays.length + " drink" + (last ? ", l'ultimo alle " + fmtTime.format(last.ts) : ""));
     }
 
-    // week bars
+    // day bars: every day from the first logged one (at least a week) up to today, scrollable sideways
     const byDay = new Map();
     for (const e of entries) byDay.set(dayKey(e.ts), (byDay.get(dayKey(e.ts)) || 0) + e.units);
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(ref0); d.setDate(d.getDate() - i);
-      days.push({ d, n: byDay.get(dayKey(d.getTime())) || 0, today: d.getTime() === today0, ref: i === 0 && !!refDay });
-    }
-    const max = Math.max(4, ...days.map((x) => x.n));
-    els.week.innerHTML = "";
-    for (const x of days) {
-      const col = document.createElement("button"); col.type = "button";
-      const key = dayKey(x.d.getTime());
-      const sel = selDay === key;
-      col.className = "day" + (x.today ? " is-today" : "") + (x.ref ? " is-ref" : "") + (sel ? " is-sel" : "");
-      col.disabled = !x.n && !x.today;
-      col.setAttribute("aria-pressed", String(sel));
-      col.addEventListener("click", () => selectDay(key));
-      const n = document.createElement("span"); n.className = "bar-n"; n.textContent = x.n ? fmtU(x.n) : "";
-      const bar = document.createElement("div"); bar.className = "bar" + (x.n ? "" : " zero");
-      bar.style.height = x.n ? Math.max(6, (x.n / max) * 92) + "px" : "2px";
-      const lab = document.createElement("span"); lab.className = "bar-d"; lab.textContent = x.today ? "oggi" : fmtDayShort.format(x.d).replace(".", "") + (refDay ? " " + x.d.getDate() : "");
-      col.append(n, bar, lab);
-      col.setAttribute("aria-label", fmtDayLong.format(x.d) + ": " + unitsLabel(x.n) + (x.n ? ", mostra la curva dell'alcolemia" : ""));
-      els.week.append(col);
-    }
+    renderWeek(byDay, today0, ref0);
+    renderStreaks(byDay, ref0);
 
     // log
     els.log.innerHTML = "";
@@ -522,6 +534,107 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
     renderSummary(byDay, ref0, refEnd);
     renderBac();
     renderSync();
+  }
+
+  let weekAnchor;              // reference day the strip was last scrolled to; undefined = never
+  function renderWeek(byDay, today0, ref0) {
+    const firstDay = entries.length ? startOfDay(new Date(entries[entries.length - 1].ts)) : today0;
+    const from = Math.min(firstDay, shift(today0, -6));
+    const days = [];
+    for (let t = from; t <= today0; t = shift(t, 1)) {
+      days.push({ t, d: new Date(t), n: byDay.get(dayKey(t)) || 0, today: t === today0, ref: !!refDay && t === ref0 });
+    }
+    const max = Math.max(4, ...days.map((x) => x.n));
+    const w = els.week;
+    // Keep the scroll offset measured from the right edge, so new days or older entries do not move the view.
+    const fromEnd = w.scrollWidth - w.scrollLeft - w.clientWidth;
+    w.innerHTML = "";
+    let refCol = null;
+    days.forEach((x, i) => {
+      const col = document.createElement("button"); col.type = "button";
+      const key = dayKey(x.t);
+      const sel = selDay === key;
+      col.className = "day" + (x.today ? " is-today" : "") + (x.ref ? " is-ref" : "") + (sel ? " is-sel" : "");
+      col.disabled = !x.n && !x.today;
+      col.dataset.t = String(x.t);
+      col.setAttribute("aria-pressed", String(sel));
+      col.addEventListener("click", () => selectDay(key));
+      const n = document.createElement("span"); n.className = "bar-n"; n.textContent = x.n ? fmtU(x.n) : "";
+      const bar = document.createElement("div"); bar.className = "bar" + (x.n ? "" : " zero");
+      bar.style.height = x.n ? Math.max(6, (x.n / max) * 92) + "px" : "2px";
+      const lab = document.createElement("span"); lab.className = "bar-d"; lab.textContent = x.today ? "oggi" : fmtDayShort.format(x.d).replace(".", "");
+      const dn = document.createElement("span");
+      const showMonth = x.d.getDate() === 1 || i === 0;
+      dn.className = "bar-dn" + (showMonth ? " month" : "");
+      dn.textContent = showMonth ? fmtDayMonth.format(x.d).replace(".", "") : String(x.d.getDate());
+      col.append(n, bar, lab, dn);
+      col.setAttribute("aria-label", fmtDayLong.format(x.d) + ": " + unitsLabel(x.n) + (x.n ? ", mostra la curva dell'alcolemia" : ""));
+      if (x.t === ref0) refCol = col;
+      w.append(col);
+    });
+    const anchor = refDay || "";
+    if (anchor !== weekAnchor && refCol) {
+      // New reference day (or first paint): put it in the rightmost column.
+      weekAnchor = anchor;
+      w.scrollLeft = refCol.offsetLeft - w.firstElementChild.offsetLeft + refCol.offsetWidth - w.clientWidth;
+    } else {
+      w.scrollLeft = w.scrollWidth - w.clientWidth - fromEnd;
+    }
+    updateWeekNav();
+  }
+
+  // Range label and arrow buttons follow the scroll position.
+  function updateWeekNav() {
+    const w = els.week;
+    const cols = w.children;
+    if (!cols.length) return;
+    const step = cols.length > 1 ? cols[1].offsetLeft - cols[0].offsetLeft : w.clientWidth;
+    const first = Math.min(cols.length - 1, Math.max(0, Math.round(w.scrollLeft / step)));
+    const last = Math.min(cols.length - 1, first + 6);
+    const a = Number(cols[first].dataset.t), b = Number(cols[last].dataset.t);
+    els.weekRange.textContent = fmtDayMonth.format(a).replace(".", "") + " - " + fmtDayMonth.format(b).replace(".", "");
+    els.weekPrev.disabled = w.scrollLeft <= 1;
+    els.weekNext.disabled = w.scrollLeft >= w.scrollWidth - w.clientWidth - 1;
+  }
+  els.week.addEventListener("scroll", () => requestAnimationFrame(updateWeekNav), { passive: true });
+  const pageWeek = (dir) => {
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    els.week.scrollBy({ left: dir * (els.week.clientWidth + 8), behavior: reduce ? "auto" : "smooth" });
+  };
+  els.weekPrev.addEventListener("click", () => pageWeek(-1));
+  els.weekNext.addEventListener("click", () => pageWeek(1));
+
+  // Longest runs of consecutive alcohol-free days and of days with at least one drink,
+  // from the first logged day up to the reference day. Today counts as it stands so far.
+  function renderStreaks(byDay, ref0) {
+    const clear = (txt) => { els.stDry.textContent = els.stWet.textContent = txt; els.stDryS.textContent = els.stWetS.textContent = ""; els.stNote.textContent = ""; };
+    if (!loaded) return clear("-");
+    if (!entries.length) return clear("0");
+    const firstDay = startOfDay(new Date(entries[entries.length - 1].ts));
+    const best = { dry: { len: 0, start: 0, end: 0 }, wet: { len: 0, start: 0, end: 0 } };
+    let kind = null, runLen = 0, runStart = 0;
+    for (let t = firstDay; t <= ref0; t = shift(t, 1)) {
+      const k = (byDay.get(dayKey(t)) || 0) > 0 ? "wet" : "dry";
+      if (k === kind) runLen++;
+      else { kind = k; runLen = 1; runStart = t; }
+      // >= keeps the most recent run on ties
+      if (runLen >= best[k].len) best[k] = { len: runLen, start: runStart, end: t };
+    }
+    const current = { dry: 0, wet: 0 };
+    if (kind) current[kind] = runLen;
+    const dayWord = (n) => n === 1 ? "giorno" : "giorni";
+    const fmtD = (t) => fmtDayMonth.format(t).replace(".", "");
+    const span = (r) => r.len === 1 ? "il " + fmtD(r.start) : "dal " + fmtD(r.start) + " al " + fmtD(r.end);
+    const fill = (vEl, sEl, b, cur) => {
+      vEl.textContent = String(b.len);
+      sEl.innerHTML = "";
+      if (!b.len) { sEl.textContent = "mai finora"; return; }
+      const curB = document.createElement("b"); curB.textContent = cur + " " + dayWord(cur);
+      sEl.append(span(b), document.createElement("br"), "Attuale: ", curB);
+    };
+    fill(els.stDry, els.stDryS, best.dry, current.dry);
+    fill(els.stWet, els.stWetS, best.wet, current.wet);
+    els.stNote.textContent = "Calcolate dal primo giorno registrato (" + fmtD(firstDay) + ")" + (refDay ? " fino al " + fmtD(ref0) + "." : ". Oggi conta per quello che c'è finora.");
   }
 
   // Reference thresholds (NIAAA heavy drinking, men): 15+ drinks per week or 5+ on a single day.
@@ -749,7 +862,7 @@ button.day:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px;
     els.sumH.textContent = refDay ? "Riepilogo al " + fmtDayLong.format(ref0) : "Riepilogo";
   }
 
-  // Picking a past date moves stats, week bars and summary to that day and shows its BAC curve.
+  // Picking a past date moves stats, day bars, streaks and summary to that day and shows its BAC curve.
   function setRefDay(key) {
     const next = !key || key >= dayKey(Date.now()) ? null : key;
     refDay = next;
